@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Shop admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<!-- =====================================================================
+     ✏️  PASTE YOUR FIREBASE CONFIG (same one as shop.html)
+
+     ALSO paste these into Firebase Console > Firestore > Rules, using YOUR email.
+     Everyone can read listings, only you can change them:
+
+       rules_version = '2';
+       service cloud.firestore {
+         match /databases/{db}/documents {
+           match /listings/{id} {
+             allow read: if true;
+             allow write: if request.auth != null
+                          && request.auth.token.email == "YOUR_EMAIL@example.com";
+           }
+         }
+       }
+     ===================================================================== -->
+<script>
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAYtWNDeI9phVOzVO_cTOMDI5ZyPVBvj-E",
+    authDomain: "depop-57ff9.firebaseapp.com",
+    projectId: "depop-57ff9",
+    storageBucket: "depop-57ff9.firebasestorage.app",
+    messagingSenderId: "795901817136",
+    appId: "1:795901817136:web:68b1f857af99b1f03e18f5"
+  };
+</script>
+
+<style>
+  :root { --brown:rgb(150,125,90); --light:#c8a27c; --soft:#e6d0b8; --deep:#a67c52; --bg:#fbf3e9; }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:"Fredoka",system-ui,sans-serif; background:var(--bg); color:#5b4630; padding:24px; }
+  main { max-width:760px; margin:0 auto; }
+  h1 { font-size:1.6rem; color:var(--deep); }
+  h2 { margin-bottom:12px; color:var(--deep); }
+  [hidden] { display:none !important; }
+  button { font:inherit; cursor:pointer; border:0; border-radius:999px; padding:9px 18px; background:var(--brown); color:#fff; }
+  button:hover { filter:brightness(1.08); }
+  button.ghost { background:var(--soft); color:var(--deep); }
+  button.danger { background:#c76f5f; }
+  input { font:inherit; width:100%; padding:9px 12px; border:2px solid var(--soft); border-radius:12px; background:#fff; color:inherit; }
+  input:focus { outline:none; border-color:var(--light); }
+  label { display:block; margin-bottom:12px; font-size:.9rem; }
+  label input { margin-top:4px; }
+
+  .panel { background:#fff; border-radius:24px; padding:24px; box-shadow:0 12px 24px -14px rgba(166,124,82,.5); }
+  #login { max-width:360px; margin:12vh auto 0; }
+  #err { color:#b5483a; margin:8px 0; font-size:.9rem; min-height:1.2em; }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .top div { display:flex; gap:8px; }
+
+  .row { display:flex; align-items:center; gap:14px; padding:12px; margin-bottom:10px; background:#fff; border-radius:18px; flex-wrap:wrap; }
+  .row.sold { opacity:.7; }
+  .row img, .thumb { width:64px; height:64px; border-radius:14px; object-fit:cover; background:var(--soft); flex:none; }
+  .info { flex:1; min-width:150px; }
+  .info b { display:block; font-weight:600; }
+  .info small { color:var(--deep); }
+  .tag { display:inline-block; padding:1px 10px; border-radius:999px; background:var(--soft); color:var(--deep); font-size:.75rem; margin-left:6px; }
+  .acts { display:flex; gap:6px; flex-wrap:wrap; }
+  .acts button { padding:7px 14px; font-size:.85rem; }
+  #empty { text-align:center; color:var(--deep); padding:30px 0; }
+
+  dialog { border:0; border-radius:24px; padding:24px; width:min(560px, 94vw); max-height:92vh; overflow:auto; font-family:inherit; }
+  dialog::backdrop { background:rgba(90,70,48,.45); }
+  .slot { display:flex; align-items:center; gap:10px; margin-bottom:10px; padding:8px; border-radius:16px; background:#fbf6ef; }
+  .sthumb { width:56px; height:56px; border-radius:12px; object-fit:cover; background:var(--soft); flex:none; display:none; }
+  .sfields { flex:1; min-width:0; display:grid; gap:6px; }
+  .sfields input { padding:7px 10px; font-size:.9rem; }
+  .sbtns { display:flex; flex-direction:column; gap:6px; flex:none; }
+  .upl, .x { display:block; text-align:center; font-size:.8rem; padding:6px 12px; border-radius:999px; background:var(--soft); color:var(--deep); cursor:pointer; border:0; font-family:inherit; }
+  .upl:hover, .x:hover { filter:brightness(.96); }
+  select { font:inherit; width:100%; padding:9px 12px; border:2px solid var(--soft); border-radius:12px; background:#fff; color:inherit; margin-top:4px; }
+  .chk { display:flex; align-items:center; gap:8px; } .chk input { width:auto; margin:0; }
+  .btns { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+  .hint { font-size:.8rem; color:var(--deep); margin:-4px 0 10px; }
+</style>
+</head>
+<body>
+<main>
+  <!-- Sign in -->
+  <form id="login" class="panel">
+    <h1>Shop admin</h1><p class="hint" style="margin:6px 0 16px">Sign in to manage your listings.</p>
+    <label>Email<input id="email" type="email" autocomplete="username" required></label>
+    <label>Password<input id="pass" type="password" autocomplete="current-password" required></label>
+    <p id="err"></p>
+    <button style="width:100%">Sign in</button>
+  </form>
+
+  <!-- Listings -->
+  <section id="app" hidden>
+    <div class="top">
+      <h1>Your listings</h1>
+      <div><button id="new">+ New listing</button><button id="out" class="ghost">Sign out</button></div>
+    </div>
+    <div id="rows"></div>
+    <p id="empty" hidden>No listings yet. Click “New listing” to add one.</p>
+  </section>
+</main>
+
+<!-- Add / edit -->
+<dialog id="dlg">
+  <form id="f">
+    <h2 id="ftitle"></h2>
+    <label>Depop link<input id="link" type="url" placeholder="https://www.depop.com/products/..."></label>
+    <label>Normal price (USD)<input id="price" type="number" step="0.01" min="0" placeholder="20"></label>
+    <label>Discounted price (USD, 0 = no discount)<input id="sale" type="number" step="0.01" min="0" value="0"></label>
+    <p class="hint">Up to 5 images. Paste a url <b>or</b> tap Upload to use a photo from your phone or computer.</p>
+    <div id="imgs"></div>
+    <label>Status
+      <select id="status">
+        <option value="available">Available (currently selling)</option>
+        <option value="upcoming">Upcoming (not ready to sell yet)</option>
+        <option value="sold">Sold</option>
+      </select>
+    </label>
+    <label id="dateWrap" hidden>Available from (optional, shown to buyers)<input id="adate" type="date"></label>
+    <div class="btns"><button type="button" id="cancel" class="ghost">Cancel</button><button>Save listing</button></div>
+  </form>
+</dialog>
+
+<script>
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const auth = firebase.auth(), db = firebase.firestore(), col = db.collection("listings");
+  const $ = id => document.getElementById(id);
+  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+  let unsub, data = {}, editing = null;
+
+  /* ---- sign in / out ---- */
+  $("login").onsubmit = async e => {
+    e.preventDefault(); $("err").textContent = "";
+    try { await auth.signInWithEmailAndPassword($("email").value, $("pass").value); }
+    catch (x) { $("err").textContent = "Couldn't sign in. Check your email and password."; }
+  };
+  $("out").onclick = () => auth.signOut();
+  auth.onAuthStateChanged(u => {
+    $("login").hidden = !!u; $("app").hidden = !u;
+    if (unsub) unsub();
+    if (u) unsub = col.orderBy("createdAt", "desc").onSnapshot(render,
+      () => alert("Couldn't load listings. Check your Firestore rules and config."));
+    else $("rows").innerHTML = "";
+  });
+
+  /* ---- list ---- */
+  const fmt = n => "$" + (Number.isInteger(+n) ? +n : (+n).toFixed(2));
+  function render(snap) {
+    const rows = $("rows"); rows.innerHTML = ""; data = {};
+    snap.forEach(d => {
+      const L = data[d.id] = d.data(), first = (L.images || []).find(i => i.url) || {};
+      const row = h("div", "row" + (L.sold ? " sold" : ""));
+      const th = first.url ? h("img") : h("div", "thumb"); if (first.url) th.src = first.url;
+      const info = h("div", "info"), title = h("b", "", first.name || "Untitled listing");
+      const st = L.sold ? "sold" : L.upcoming ? "upcoming" : "available";
+      if (st !== "available") title.append(h("span", "tag", st === "sold" ? "Sold" : "Upcoming"));
+      const sale = +L.discountedPrice > 0 && +L.discountedPrice < +L.price;
+      info.append(title, h("small", "", L.price === "" || L.price == null ? "No price"
+        : sale ? fmt(L.discountedPrice) + " (was " + fmt(L.price) + ")" : fmt(L.price)));
+      if (st === "upcoming" && L.availableDate) info.append(h("small", "", " · available " + L.availableDate));
+      const acts = h("div", "acts");
+      const sold = h("button", "ghost", st === "sold" ? "Mark available" : st === "upcoming" ? "Mark currently selling" : "Mark sold");
+      sold.onclick = () => col.doc(d.id).update(st === "available" ? { sold: true, upcoming: false } : { sold: false, upcoming: false });
+      const edit = h("button", "ghost", "Edit"); edit.onclick = () => openForm(d.id);
+      const del = h("button", "danger", "Delete");
+      del.onclick = () => { if (confirm("Delete this listing for good?")) col.doc(d.id).delete(); };
+      acts.append(sold, edit, del); row.append(th, info, acts); rows.append(row);
+    });
+    $("empty").hidden = rows.children.length > 0;
+  }
+
+  /* ---- add / edit form ---- */
+  const up = ["", "", "", "", ""];   // uploaded photos (as data) per slot
+
+  // Shrinks a photo so it fits in the database (about 800px wide, ~150 KB)
+  function shrink(file) {
+    return new Promise((res, rej) => {
+      const img = new Image(), src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(src);
+        let max = 800, q = .78, out;
+        for (let k = 0; k < 5; k++) {
+          const sc = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas");
+          c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+          const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+          out = c.toDataURL("image/jpeg", q);
+          if (out.length < 180000) break;
+          max *= .85; q -= .07;
+        }
+        res(out);
+      };
+      img.onerror = rej; img.src = src;
+    });
+  }
+  const PH = "Paste image url";
+  function setThumb(i) {
+    const src = up[i] || $("u" + i).value.trim(), t = $("t" + i);
+    t.style.display = src ? "block" : "none"; if (src) t.src = src;
+    $("u" + i).placeholder = up[i] ? "Photo uploaded ✓" : PH;
+  }
+  for (let i = 0; i < 5; i++) {
+    const r = h("div", "slot");
+    r.innerHTML = '<img class="sthumb" id="t' + i + '" alt="">' +
+      '<div class="sfields"><input id="n' + i + '" placeholder="Name ' + (i + 1) + '"><input id="u' + i + '" type="url" placeholder="' + PH + '"></div>' +
+      '<div class="sbtns"><label class="upl">Upload<input id="f' + i + '" type="file" accept="image/*" hidden></label>' +
+      '<button type="button" class="x" id="x' + i + '">Clear</button></div>';
+    $("imgs").append(r);
+    $("u" + i).oninput = () => { up[i] = ""; setThumb(i); };
+    $("f" + i).onchange = async e => {
+      const file = e.target.files[0]; if (!file) return;
+      try { up[i] = await shrink(file); $("u" + i).value = ""; setThumb(i); }
+      catch (x) { alert("Couldn't read that image. Try a JPG or PNG."); }
+      e.target.value = "";
+    };
+    $("x" + i).onclick = () => { up[i] = ""; $("u" + i).value = ""; $("n" + i).value = ""; setThumb(i); };
+  }
+  $("status").onchange = () => { $("dateWrap").hidden = $("status").value !== "upcoming"; };
+
+  function openForm(id) {
+    editing = id; const L = id ? data[id] : {};
+    $("ftitle").textContent = id ? "Edit listing" : "New listing";
+    $("link").value = L.link || ""; $("price").value = L.price ?? ""; $("sale").value = L.discountedPrice || 0;
+    $("status").value = L.sold ? "sold" : L.upcoming ? "upcoming" : "available";
+    $("adate").value = L.availableDate || ""; $("status").onchange();
+    for (let i = 0; i < 5; i++) {
+      const im = (L.images || [])[i] || {}, isData = (im.url || "").startsWith("data:");
+      up[i] = isData ? im.url : ""; $("n" + i).value = im.name || ""; $("u" + i).value = isData ? "" : (im.url || ""); setThumb(i);
+    }
+    $("dlg").showModal();
+  }
+  $("new").onclick = () => openForm(null);
+  $("cancel").onclick = () => $("dlg").close();
+  $("f").onsubmit = async e => {
+    e.preventDefault();
+    const images = [];
+    for (let i = 0; i < 5; i++) { const url = up[i] || $("u" + i).value.trim(); if (url) images.push({ name: $("n" + i).value.trim(), url }); }
+    if (JSON.stringify(images).length > 900000) { alert("The uploaded photos are too big together. Remove one, or use an image url for some of them."); return; }
+    const st = $("status").value;
+    const doc = { link: $("link").value.trim(), price: $("price").value === "" ? "" : Number($("price").value),
+                  discountedPrice: Number($("sale").value) || 0, images,
+                  sold: st === "sold", upcoming: st === "upcoming", availableDate: st === "upcoming" ? $("adate").value : "" };
+    try {
+      if (editing) await col.doc(editing).update(doc);
+      else await col.add({ ...doc, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      $("dlg").close();
+    } catch (x) { alert("Couldn't save. Make sure you're signed in with the email in your Firestore rules."); }
+  };
+</script>
+</body>
+</html>
